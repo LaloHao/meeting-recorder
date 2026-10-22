@@ -86,8 +86,8 @@ export async function recordMeeting(opts: RecordOptions): Promise<RecordResult> 
   let title = opts.title ?? meetingCode(opts.url) ?? 'Meeting'
   try {
     const signedIn = (await context.cookies('https://www.google.com')).some((c) => c.name === 'SID')
-    log(signedIn ? `Profile "${opts.profile ?? 'default'}" is signed in to Google.` : `Profile "${opts.profile ?? 'default'}" has no Google session: joining as a guest.`)
-    await joinMeet(page, opts.url, { guestName: opts.guestName, log })
+    log(signedIn ? `Profile "${opts.profile ?? 'default'}" has a Google session.` : `Profile "${opts.profile ?? 'default'}" has no Google session: joining as a guest.`)
+    await joinMeet(page, opts.url, { guestName: opts.guestName, expectSignedIn: signedIn, log })
     await arrangeMeetView(page, log)
 
     recording = await startTabRecording(page, partial, WINDOW)

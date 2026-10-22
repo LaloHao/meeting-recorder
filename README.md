@@ -105,8 +105,14 @@ needs no system keyring; the profile folder is readable only by you.
 
 `export-profile` writes just the session of a profile (its cookies and two small settings
 files, about 100 KiB) — enough for the agent to join as that account on another machine, in a
-container or from a Kubernetes Secret, with `join --profile-archive <file>`. The archive holds
-a Google sign-in: keep it private. When Google expires the session, sign in and export again.
+container, with `join --profile-archive <file>`. The archive holds a Google sign-in: keep it
+private.
+
+**Use a session in one place only.** Google keeps rotating some of its session cookies; when it
+sees one copy of a session present cookies that another copy already rotated, it treats them as
+stolen and ends the session (then the agent stops with "Google no longer accepts the session").
+So move a session rather than copy it: export it, then delete the local profile
+(`logout <profile>`); and never run two recordings with the same account at once.
 
 `--upload s3://bucket/prefix` sends the video and the recording file to S3-compatible storage
 when the meeting ends (to `prefix/<year>/<month>/`), with the credentials in `S3_ENDPOINT`,

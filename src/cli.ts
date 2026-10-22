@@ -101,7 +101,7 @@ try {
     const archive = exportSession(join(profilesRoot(), profile))
     if (values.out) {
       writeFileSync(values.out, archive, { mode: 0o600 })
-      console.error(`Session of profile "${profile}" written to ${values.out} (${Math.ceil(archive.length / 1024)} KiB). It holds a Google sign-in: keep it private.`)
+      console.error(`Session of profile "${profile}" written to ${values.out} (${Math.ceil(archive.length / 1024)} KiB). It holds a Google sign-in: keep it private, and use it in one place only — Google ends a session it sees used from two copies (delete this profile with \`logout ${profile}\` once the session is in use elsewhere).`)
     } else if (process.stdout.isTTY) {
       throw new Error('The archive is binary: redirect it to a file (> profile.tgz) or use -o <file>.')
     } else {

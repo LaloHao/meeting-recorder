@@ -56,6 +56,8 @@ async function clickIfVisible(page: Page, name: RegExp, timeout = 0): Promise<bo
 export interface JoinOptions {
   /** Name to show when joining without a Google account. */
   guestName?: string
+  /** The profile is meant to be signed in: being asked for a name then means Google ended the session. */
+  expectSignedIn?: boolean
   /** How long to wait to be let in, in ms. */
   admitTimeoutMs?: number
   log?(message: string): void
@@ -69,8 +71,15 @@ export async function joinMeet(page: Page, url: string, opts: JoinOptions = {}):
   // Without camera/microphone permission Meet asks how to continue.
   await clickIfVisible(page, /continue without (microphone and camera|camera|microphone)/i, 8000)
 
+  // Meet asks for a name only when nobody is signed in.
   const nameInput = page.getByRole('textbox', { name: /your name/i })
   if (await nameInput.isVisible().catch(() => false)) {
+    if (opts.expectSignedIn) {
+      throw new Error(
+        'The profile holds Google cookies, but Google no longer accepts them (the session was ended, e.g. after the ' +
+          'same session was used from several copies of the profile). Sign in again with `meeting-recorder login`.'
+      )
+    }
     await nameInput.fill(opts.guestName ?? 'Meeting Recorder')
   }
 

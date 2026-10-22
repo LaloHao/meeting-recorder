@@ -69,6 +69,8 @@ meeting-recorder login [-p <profile>]  Open an agent profile in Chrome to sign i
 meeting-recorder join <url> [options]  Join a Google Meet call and record it
 meeting-recorder profiles              List the agent profiles and whether they are signed in
 meeting-recorder logout <profile>      Delete a profile and its session
+meeting-recorder export-profile [-p <profile>] [-o <file>]
+                                       Write the profile's Google session as a small archive
 
 Options for join:
   -p, --profile <name>     Agent profile to join with (default: default)
@@ -79,9 +81,11 @@ Options for join:
       --alone <minutes>    Leave after this long alone in the call (default: 2)
       --max <minutes>      Stop after this long (default: 240)
       --show               Show the agent's Chrome in a window
+      --profile-archive <file>  Use a session from export-profile instead of a local profile
+      --upload <s3://bucket/prefix>  Upload the files when done
 ```
 
-**Ctrl+C** stops the recording and saves it. If anything goes wrong mid-meeting (the call
+**Ctrl+C** (or SIGTERM) stops the recording and saves it. If anything goes wrong mid-meeting (the call
 ends, the page closes), what was recorded until then is saved too.
 
 ### Profiles
@@ -96,6 +100,20 @@ The sign-in happens in plain Chrome, not in the automated one: Google refuses si
 automated browsers, and Meet turns away guests without an account that come from them (so
 `--guest-name` rarely gets in). Cookies are stored with Chrome's basic password store, which
 needs no system keyring; the profile folder is readable only by you.
+
+### Running somewhere else
+
+`export-profile` writes just the session of a profile (its cookies and two small settings
+files, about 100 KiB) — enough for the agent to join as that account on another machine, in a
+container or from a Kubernetes Secret, with `join --profile-archive <file>`. The archive holds
+a Google sign-in: keep it private. When Google expires the session, sign in and export again.
+
+`--upload s3://bucket/prefix` sends the video and the recording file to S3-compatible storage
+when the meeting ends (to `prefix/<year>/<month>/`), with the credentials in `S3_ENDPOINT`,
+`AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`; for Cloudflare R2, `S3_ENDPOINT` is
+`https://<account-id>.r2.cloudflarestorage.com`. The recording file goes last, so its presence
+means the video is complete. See [docs/kubernetes.md](docs/kubernetes.md) for the cluster
+design.
 
 ## The recording
 

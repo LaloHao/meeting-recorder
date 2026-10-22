@@ -8,7 +8,9 @@ import { fileURLToPath } from 'node:url'
 import { launchRecorderBrowser, recorderPage, WINDOW, type Display } from './chrome.js'
 import { arrangeMeetView, isMeetUrl, joinMeet, leaveMeet, meetingCode, meetState, setCaptionsLanguage } from './meet.js'
 import { baseName, finalizeVideo, recordingFile, type SpeakerTurn } from './recording-file.js'
+import { importSession } from './profile-archive.js'
 import { startTabRecording, type TabRecording } from './tab-recorder.js'
+import { credentialsFromEnv, objectKey, parseS3Url, uploadFile } from './upload.js'
 
 const DETECTOR = fileURLToPath(new URL('../shared/meet-speakers.js', import.meta.url))
 
@@ -22,6 +24,10 @@ export interface RecordOptions {
   guestName?: string
   /** Agent profile (and so Google account) to join with. Default `default`. */
   profile?: string
+  /** A session exported with `export-profile`, used instead of a local profile (containers). */
+  profileArchive?: string
+  /** `s3://bucket/prefix`: upload the files there when done (credentials from the environment). */
+  upload?: string
   /** Spoken language of the meeting (`es`, `en`…), for Meet's live captions. */
   language?: string
   /** Leave after this many minutes alone in the call. Default 2. */
@@ -37,6 +43,8 @@ export interface RecordOptions {
 }
 
 export interface RecordResult {
+  /** s3:// URLs of the uploaded files, when uploading. */
+  uploaded: string[]
   video: string
   recording: string
   durationSeconds: number
@@ -50,8 +58,23 @@ export async function recordMeeting(opts: RecordOptions): Promise<RecordResult> 
   const log = opts.log ?? (() => {})
   const outDir = resolve(opts.outDir ?? 'recordings')
   mkdirSync(outDir, { recursive: true })
+  // Check the upload settings before joining, not after an hour of meeting.
+  const target = opts.upload ? parseS3Url(opts.upload) : null
+  const creds = target ? credentialsFromEnv() : null
+  const upload = async (files: string[], at: Date): Promise<string[]> => {
+    if (!target || !creds) return []
+    const urls: string[] = []
+    // The recording file goes last: its presence says the video is complete.
+    for (const file of files) urls.push(await uploadFile(file, target, objectKey(target, file, at), creds))
+    log(`Uploaded to ${urls.join(', ')}`)
+    return urls
+  }
+  const imported = opts.profileArchive ? importSession(opts.profileArchive) : null
 
-  const browser = await launchRecorderBrowser({ display: opts.display, profile: opts.profile })
+  const browser = await launchRecorderBrowser({ display: opts.display, profile: opts.profile, userDataDir: imported?.dir }).catch((error: unknown) => {
+    imported?.cleanup()
+    throw error
+  })
   const context = browser.context
   const page = await recorderPage(context).catch(async (error: unknown) => {
     await browser.close()
@@ -94,7 +117,12 @@ export async function recordMeeting(opts: RecordOptions): Promise<RecordResult> 
     if (!recording) {
       // What the agent was looking at helps to tell why (a dialog, a sign-in wall…).
       const shot = join(outDir, `error-${Date.now()}.png`)
-      if (await page.screenshot({ path: shot }).then(() => true, () => false)) log(`Screenshot of the page: ${shot}`)
+      if (await page.screenshot({ path: shot }).then(() => true, () => false)) {
+        log(`Screenshot of the page: ${shot}`)
+        // In a container the local folder goes away with the Pod.
+        await upload([shot], new Date()).catch((e: Error) => log(`Could not upload the screenshot: ${e.message}`))
+      }
+      imported?.cleanup()
       await browser.close()
       rmSync(partial, { force: true })
       throw error
@@ -124,7 +152,9 @@ export async function recordMeeting(opts: RecordOptions): Promise<RecordResult> 
   const file = recordingFile({ title, url: opts.url, startedAtMs: recording.startedAtMs, endedAtMs, speakers: turns })
   const json = join(outDir, `${name}.json`)
   writeFileSync(json, JSON.stringify(file, null, 2) + '\n')
-  return { video, recording: json, durationSeconds: file.durationSeconds, speakers: [...new Set(turns.map((t) => t.name))] }
+  imported?.cleanup()
+  const uploaded = await upload([video, json], new Date(recording.startedAtMs))
+  return { video, recording: json, uploaded, durationSeconds: file.durationSeconds, speakers: [...new Set(turns.map((t) => t.name))] }
 }
 
 /** The meeting's title as Meet shows it (calendar events have one), if any. */

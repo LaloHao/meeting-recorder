@@ -1,10 +1,14 @@
 #!/usr/bin/env node
-// meeting-recorder login | join <url> | profiles | logout <profile>
+// meeting-recorder login | join <url> | profiles | logout <profile> | export-profile
 
 import { createInterface } from 'node:readline/promises'
 import { parseArgs } from 'node:util'
 
+import { writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 import { DEFAULT_PROFILE, listProfiles, openProfileForSignIn, profilesRoot, removeProfile, validProfileName } from './chrome.js'
+import { exportSession } from './profile-archive.js'
 import { recordMeeting } from './session.js'
 
 const HELP = `meeting-recorder — join a meeting and record what is shared, the audio, and who spoke when
@@ -14,6 +18,9 @@ Usage:
   meeting-recorder join <url> [options]  Join a Google Meet call and record it
   meeting-recorder profiles              List the agent profiles and whether they are signed in
   meeting-recorder logout <profile>      Delete a profile and its session
+  meeting-recorder export-profile [-p <profile>] [-o <file>]
+                                         Write the profile's Google session as a small archive
+                                         (for a container or a Kubernetes Secret); stdout by default
 
 Each profile is a separate Chrome profile with its own Google session (default: "${DEFAULT_PROFILE}").
 
@@ -25,12 +32,15 @@ Options for join:
       --guest-name <name>  Name to join with when the profile is not signed in
       --alone <minutes>    Leave after this long alone in the call (default: 2)
       --max <minutes>      Stop after this long (default: 240)
-      --show               Show the agent's Chrome in a window (default on Linux: an invisible virtual display)
+      --show               Show the agent's Chrome in a window
+      --profile-archive <file>  Use a session from export-profile instead of a local profile
+      --upload <s3://bucket/prefix>  Upload the files when done (S3_ENDPOINT, AWS_ACCESS_KEY_ID,
+                           AWS_SECRET_ACCESS_KEY; Cloudflare R2 works) (default on Linux: an invisible virtual display)
 
 Options for logout:
   -y, --yes                Do not ask for confirmation
 
-Ctrl+C stops the recording and keeps what was recorded.
+Ctrl+C (or SIGTERM) stops the recording and keeps what was recorded.
 Profiles live in ${profilesRoot()} (MEETING_RECORDER_PROFILES).`
 
 const { values, positionals } = parseArgs({
@@ -45,6 +55,8 @@ const { values, positionals } = parseArgs({
     alone: { type: 'string' },
     max: { type: 'string' },
     show: { type: 'boolean' },
+    'profile-archive': { type: 'string' },
+    upload: { type: 'string' },
     help: { type: 'boolean', short: 'h' }
   }
 })
@@ -85,20 +97,35 @@ try {
       if (!/^y(es)?$/i.test(answer.trim())) process.exit(1)
     }
     console.error(removeProfile(name) ? `Profile "${name}" deleted.` : `There is no profile "${name}".`)
+  } else if (command === 'export-profile') {
+    const archive = exportSession(join(profilesRoot(), profile))
+    if (values.out) {
+      writeFileSync(values.out, archive, { mode: 0o600 })
+      console.error(`Session of profile "${profile}" written to ${values.out} (${Math.ceil(archive.length / 1024)} KiB). It holds a Google sign-in: keep it private.`)
+    } else if (process.stdout.isTTY) {
+      throw new Error('The archive is binary: redirect it to a file (> profile.tgz) or use -o <file>.')
+    } else {
+      process.stdout.write(archive)
+    }
   } else if (command === 'join' && url) {
     let requestStop: () => void = () => {}
     const stopSignal = new Promise<void>((r) => (requestStop = r))
-    process.once('SIGINT', () => {
-      log('Stopping… (Ctrl+C again to abort without saving)')
-      requestStop()
-      process.once('SIGINT', () => process.exit(130))
-    })
+    // Ctrl+C in a terminal, SIGTERM from Kubernetes when the Job or Pod is deleted.
+    for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+      process.once(signal, () => {
+        log(`Stopping on ${signal}… (again to abort without saving)`)
+        requestStop()
+        process.once(signal, () => process.exit(130))
+      })
+    }
     const result = await recordMeeting({
       url,
       outDir: values.out,
       title: values.title,
       guestName: values['guest-name'],
       profile,
+      profileArchive: values['profile-archive'],
+      upload: values.upload,
       language: values.language,
       aloneMinutes: minutes(values.alone, 'alone'),
       maxMinutes: minutes(values.max, 'max'),
@@ -109,6 +136,7 @@ try {
     console.log(`Video:     ${result.video}`)
     console.log(`Recording: ${result.recording}`)
     console.log(`Duration:  ${Math.round(result.durationSeconds)} s; speakers: ${result.speakers.join(', ') || 'none detected'}`)
+    for (const u of result.uploaded) console.log(`Uploaded:  ${u}`)
   } else {
     console.log(HELP)
     process.exitCode = 2

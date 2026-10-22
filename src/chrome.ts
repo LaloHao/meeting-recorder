@@ -174,8 +174,9 @@ async function startVirtualDisplay(): Promise<{ display: string; stop(): void }>
  * Chrome, and Chrome carries no automation switches. The DevTools port listens on
  * 127.0.0.1 only, on a random port, for as long as the recording lasts.
  */
-export async function launchRecorderBrowser(opts: { display?: Display; profile?: string } = {}): Promise<RecorderBrowser> {
-  const dir = profileDir(opts.profile)
+export async function launchRecorderBrowser(opts: { display?: Display; profile?: string; userDataDir?: string } = {}): Promise<RecorderBrowser> {
+  // An imported session (see profile-archive.ts) comes as a folder of its own.
+  const dir = opts.userDataDir ?? profileDir(opts.profile)
   startClean(dir)
   const portFile = join(dir, 'DevToolsActivePort')
   rmSync(portFile, { force: true })

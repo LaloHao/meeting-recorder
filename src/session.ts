@@ -56,7 +56,7 @@ const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms
 export async function recordMeeting(opts: RecordOptions): Promise<RecordResult> {
   if (!isMeetUrl(opts.url)) throw new Error('Only Google Meet links are supported for now (https://meet.google.com/…).')
   const log = opts.log ?? (() => {})
-  const outDir = resolve(opts.outDir ?? 'recordings')
+  const outDir = resolve(opts.outDir ?? process.env.MEETING_RECORDER_OUT ?? 'recordings')
   mkdirSync(outDir, { recursive: true })
   // Check the upload settings before joining, not after an hour of meeting.
   const target = opts.upload ? parseS3Url(opts.upload) : null

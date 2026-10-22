@@ -32,5 +32,6 @@
     "build:extension": "node scripts/build-extension.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
-  }
+  },
+  "packageManager": "pnpm@12.11.2"
 }

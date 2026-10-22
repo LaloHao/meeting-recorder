@@ -26,7 +26,7 @@ Each profile is a separate Chrome profile with its own Google session (default: 
 
 Options for join:
   -p, --profile <name>     Agent profile to join with (default: ${DEFAULT_PROFILE})
-  -o, --out <dir>          Folder for the recording (default: ./recordings)
+  -o, --out <dir>          Folder for the recording (default: ./recordings, or MEETING_RECORDER_OUT)
   -t, --title <title>      Recording title (default: the meeting's title or code)
   -l, --language <code>    Spoken language (es, en, pt, fr, de, it): Meet's captions, which name the speakers, listen for it
       --guest-name <name>  Name to join with when the profile is not signed in

@@ -135,6 +135,13 @@ function onPath(name: string): boolean {
 
 /** Starts Xvfb on a free display number (it reports the number it picked). */
 async function startVirtualDisplay(): Promise<{ display: string; stop(): void }> {
+  // Xvfb's socket directory; only root may create it at startup, and in a container
+  // /tmp starts empty.
+  try {
+    mkdirSync('/tmp/.X11-unix', { recursive: true, mode: 0o1777 })
+  } catch {
+    /* exists, or Xvfb will report the problem */
+  }
   const xvfb = spawn('Xvfb', ['-displayfd', '3', '-screen', '0', `${WINDOW.width}x${WINDOW.height}x24`, '-nolisten', 'tcp'], {
     detached: true,
     stdio: ['ignore', 'ignore', 'ignore', 'pipe']
@@ -203,6 +210,9 @@ export async function launchRecorderBrowser(opts: { display?: Display; profile?:
     '--no-first-run',
     '--no-default-browser-check',
     PASSWORD_STORE,
+    // Extra switches for the environment, e.g. --no-sandbox where a container can't give
+    // Chrome the user namespaces its sandbox needs.
+    ...(process.env.MEETING_RECORDER_CHROME_FLAGS ?? '').split(/\s+/).filter(Boolean),
     'about:blank'
   ]
   const child = spawn(findChrome(), args, { detached: true, stdio: 'ignore', env })

@@ -8,6 +8,7 @@ import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { DEFAULT_PROFILE, listProfiles, openProfileForSignIn, profilesRoot, removeProfile, validProfileName } from './chrome.js'
+import { k8sJoin, k8sList, k8sLogs, k8sSeedProfile, k8sStop } from './k8s.js'
 import { exportSession } from './profile-archive.js'
 import { recordMeeting } from './session.js'
 
@@ -37,6 +38,15 @@ Options for join:
       --upload <s3://bucket/prefix>  Upload the files when done (S3_ENDPOINT, AWS_ACCESS_KEY_ID,
                            AWS_SECRET_ACCESS_KEY; Cloudflare R2 works) (default on Linux: an invisible virtual display)
 
+In a Kubernetes cluster (kubectl's current context; see docs/kubernetes.md):
+  meeting-recorder k8s seed-profile -p <profile>   Move a signed-in profile's session into the cluster
+                                                   (the local profile is deleted afterwards)
+  meeting-recorder k8s join <url> [-p <profile>] [-t <title>] [-l <code>] [--max <min>] [--alone <min>]
+  meeting-recorder k8s list                        Recordings (Jobs) and their state
+  meeting-recorder k8s logs <job> [-f]             The agent's log
+  meeting-recorder k8s stop <job>                  Stop: the agent saves and uploads what it recorded
+  Options: -n, --namespace <ns> (default: meeting-recorder), --context <ctx>
+
 Options for logout:
   -y, --yes                Do not ask for confirmation
 
@@ -57,6 +67,9 @@ const { values, positionals } = parseArgs({
     show: { type: 'boolean' },
     'profile-archive': { type: 'string' },
     upload: { type: 'string' },
+    namespace: { type: 'string', short: 'n' },
+    context: { type: 'string' },
+    follow: { type: 'boolean', short: 'f' },
     help: { type: 'boolean', short: 'h' }
   }
 })
@@ -70,6 +83,13 @@ const minutes = (value: string | undefined, name: string): number | undefined =>
   const n = Number(value)
   if (!Number.isFinite(n) || n <= 0) throw new Error(`--${name} must be a number of minutes.`)
   return n
+}
+
+async function confirm(question: string, byDefault: boolean): Promise<boolean> {
+  const rl = createInterface({ input: process.stdin, output: process.stderr })
+  const answer = (await rl.question(question)).trim()
+  rl.close()
+  return answer === '' ? byDefault : /^y(es)?$/i.test(answer)
 }
 
 try {
@@ -90,13 +110,42 @@ try {
   } else if (command === 'logout' && url) {
     // `url` is the second positional: here, the profile name.
     const name = url
-    if (!values.yes) {
-      const rl = createInterface({ input: process.stdin, output: process.stderr })
-      const answer = await rl.question(`Delete profile "${name}" and its Google session? [y/N] `)
-      rl.close()
-      if (!/^y(es)?$/i.test(answer.trim())) process.exit(1)
-    }
+    if (!values.yes && !(await confirm(`Delete profile "${name}" and its Google session? [y/N] `, false))) process.exit(1)
     console.error(removeProfile(name) ? `Profile "${name}" deleted.` : `There is no profile "${name}".`)
+  } else if (command === 'k8s') {
+    const kube = { namespace: values.namespace ?? 'meeting-recorder', context: values.context }
+    const [, sub, arg] = positionals
+    if (sub === 'seed-profile') {
+      const archive = exportSession(join(profilesRoot(), profile))
+      await k8sSeedProfile(kube, profile, archive, log)
+      // The cluster's copy is now the one in use: a second copy here would make Google end the session.
+      if (values.yes || (await confirm(`Delete the local profile "${profile}" now that its session lives in the cluster? [Y/n] `, true))) {
+        removeProfile(profile)
+        log(`Local profile "${profile}" deleted.`)
+      } else {
+        log(`Kept the local profile "${profile}": do not use it while the cluster does (Google ends sessions used from two copies).`)
+      }
+    } else if (sub === 'join' && arg) {
+      const name = k8sJoin(kube, {
+        url: arg,
+        profile,
+        title: values.title,
+        language: values.language,
+        maxMinutes: minutes(values.max, 'max'),
+        aloneMinutes: minutes(values.alone, 'alone')
+      })
+      console.log(`Job ${name} created. Follow it with: meeting-recorder k8s logs ${name} -f`)
+    } else if (sub === 'list') {
+      console.log(k8sList(kube))
+    } else if (sub === 'logs' && arg) {
+      process.exitCode = await k8sLogs(kube, arg, Boolean(values.follow))
+    } else if (sub === 'stop' && arg) {
+      k8sStop(kube, arg)
+      console.log(`Stopping ${arg}: the agent saves and uploads what it recorded, then the Job goes away.`)
+    } else {
+      console.log(HELP)
+      process.exitCode = 2
+    }
   } else if (command === 'export-profile') {
     const archive = exportSession(join(profilesRoot(), profile))
     if (values.out) {

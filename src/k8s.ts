@@ -115,6 +115,8 @@ export async function k8sSeedProfile(opts: KubeOptions, profile: string, archive
             name: 'seed',
             image: settings.image,
             command: ['sleep', '600'],
+            // The namespace's ResourceQuota requires every Pod to declare its requests.
+            resources: { requests: { cpu: '100m', memory: '128Mi' }, limits: { cpu: '500m', memory: '256Mi' } },
             securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: ['ALL'] } },
             volumeMounts: [{ name: 'profiles', mountPath: '/profiles' }]
           }
@@ -124,8 +126,8 @@ export async function k8sSeedProfile(opts: KubeOptions, profile: string, archive
     })
   )
   try {
-    log('Waiting for the seed Pod…')
-    kubectl(opts, ['wait', '--for=condition=Ready', `pod/${pod}`, '--timeout=180s'])
+    log('Waiting for the seed Pod (the first pull of the image takes a while)…')
+    kubectl(opts, ['wait', '--for=condition=Ready', `pod/${pod}`, '--timeout=600s'])
     const dir = mkdtempSync(join(tmpdir(), 'meeting-recorder-seed-'))
     const local = join(dir, 'session.tgz')
     writeFileSync(local, archive, { mode: 0o600 })

@@ -1,0 +1,28 @@
+{{- $storage := dict -}}
+{{- if eq .Values.storage.type "s3" -}}
+{{- if not (and .Values.storage.s3.url .Values.storage.s3.endpoint) -}}
+{{- fail "storage.s3.url and storage.s3.endpoint are required with storage.type=s3" -}}
+{{- end -}}
+{{- $storage = dict "type" "s3" "url" .Values.storage.s3.url "endpoint" .Values.storage.s3.endpoint "credentialsSecret" .Values.storage.s3.credentialsSecret -}}
+{{- else if eq .Values.storage.type "pvc" -}}
+{{- $storage = dict "type" "pvc" "claimName" (printf "%s-recordings" .Release.Name) -}}
+{{- else -}}
+{{- fail "storage.type must be s3 or pvc" -}}
+{{- end -}}
+# Read by `meeting-recorder k8s join` and `k8s seed-profile` to build each Job.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: meeting-recorder-settings
+  namespace: {{ .Release.Namespace }}
+data:
+  settings.json: |
+    {{- dict
+        "image" (printf "%s:%s" .Values.image.repository .Values.image.tag)
+        "imagePullSecret" .Values.imagePullSecret
+        "timeZone" .Values.timeZone
+        "resources" .Values.resources
+        "maxMinutes" .Values.maxMinutes
+        "aloneMinutes" .Values.aloneMinutes
+        "storage" $storage
+      | toPrettyJson | nindent 4 }}

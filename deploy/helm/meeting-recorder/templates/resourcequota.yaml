@@ -1,0 +1,12 @@
+# Each recording requests resources.requests.cpu: the quota lets at most
+# maxConcurrent run at once, so recordings don't starve the node. A Job over the
+# limit gets no Pod (its Pod creation is refused) until the deadline ends it.
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: meeting-recorder
+  namespace: {{ .Release.Namespace }}
+spec:
+  hard:
+    requests.cpu: {{ mulf (.Values.resources.requests.cpu | float64) (.Values.maxConcurrent | float64) | quote }}
+    requests.memory: {{ printf "%dMi" (mul (trimSuffix "Mi" .Values.resources.requests.memory | atoi) (.Values.maxConcurrent | int)) | quote }}

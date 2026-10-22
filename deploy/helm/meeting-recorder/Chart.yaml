@@ -1,0 +1,7 @@
+apiVersion: v2
+name: meeting-recorder
+description: Settings and limits for recording meetings as Kubernetes Jobs, created by `meeting-recorder k8s join`
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/LaloHao/meeting-recorder

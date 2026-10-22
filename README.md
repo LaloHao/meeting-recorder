@@ -17,6 +17,9 @@ searchable transcript with speaker names and key frames.
   speaking indicator of each tile is a fallback.
 - **Invisible on Linux.** Chrome draws on a virtual display of 1920×1080, so nothing opens on
   your desktop and the frame size does not depend on your monitors.
+- **Or in your cluster.** A container image and a Helm chart run each meeting as a
+  Kubernetes Job, created from your laptop and uploading to S3/R2 — see
+  [docs/kubernetes.md](docs/kubernetes.md).
 
 Also in this repository: a [browser extension](#browser-extension) that records a meeting tab
 you are in yourself, with the same output.
@@ -118,8 +121,8 @@ So move a session rather than copy it: export it, then delete the local profile
 when the meeting ends (to `prefix/<year>/<month>/`), with the credentials in `S3_ENDPOINT`,
 `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`; for Cloudflare R2, `S3_ENDPOINT` is
 `https://<account-id>.r2.cloudflarestorage.com`. The recording file goes last, so its presence
-means the video is complete. See [docs/kubernetes.md](docs/kubernetes.md) for the cluster
-design.
+means the video is complete. To run it in a cluster, see
+[docs/kubernetes.md](docs/kubernetes.md).
 
 ## The recording
 
@@ -166,6 +169,23 @@ video-context reads next to a video.
 6. It leaves when the call ends, after being alone for `--alone` minutes, at `--max`, or on
    Ctrl+C; then ffmpeg rewrites the WebM without re-encoding to add its duration and seek
    index and drop Chrome's `alpha_mode` tag, which some players fail on.
+
+## Container image
+
+`ghcr.io/lalohao/meeting-recorder` (amd64): the agent with Google Chrome, Xvfb and ffmpeg,
+running as an unprivileged user. Built from the [Dockerfile](Dockerfile) on every push to
+`main`.
+
+```bash
+docker run --rm --shm-size=1g -v "$PWD/recordings:/recordings" \
+  -v "$HOME/.config/meeting-recorder/profiles:/profiles" -e MEETING_RECORDER_PROFILES=/profiles \
+  --user "$(id -u):$(id -g)" -e HOME=/tmp \
+  ghcr.io/lalohao/meeting-recorder join https://meet.google.com/abc-defg-hij -p bot
+```
+
+Mount the profile folder itself (rather than a copy of it) so there is a single copy of the
+session. Chrome runs with `--no-sandbox` in the image: a container's default seccomp profile
+denies the user namespaces its sandbox needs.
 
 ## Browser extension
 

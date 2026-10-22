@@ -1,0 +1,46 @@
+# This chart runs nothing by itself: it publishes the settings the CLI
+# (`meeting-recorder k8s join`) uses to create one Job per meeting, and limits how
+# many recordings run at once. See docs/kubernetes.md.
+
+image:
+  repository: ghcr.io/lalohao/meeting-recorder
+  tag: latest
+
+# Name of an image pull Secret, for a private copy of the image ("" for none).
+imagePullSecret: ""
+
+# Time zone of the recordings' file names (the container has none).
+timeZone: UTC
+
+# Resources of each recording Job. Chrome + Meet + software VP9 ≈ one core.
+resources:
+  requests:
+    cpu: "1"
+    memory: 1536Mi
+  limits:
+    cpu: "2"
+    memory: 3Gi
+
+# At most this many recordings at once (a ResourceQuota on requests.cpu and
+# requests.memory). Each one needs its own account: an account records one meeting
+# at a time.
+maxConcurrent: 2
+
+# Defaults of `k8s join`, in minutes.
+maxMinutes: 240
+aloneMinutes: 2
+
+# Where recordings go.
+# - s3: uploaded when the meeting ends. credentialsSecret is an existing Secret
+#   (never created by this chart) with AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY.
+#   Cloudflare R2: endpoint https://<account-id>.r2.cloudflarestorage.com
+# - pvc: a PersistentVolumeClaim created by this chart (kept on uninstall).
+storage:
+  type: s3
+  s3:
+    url: ""         # s3://bucket/optional/prefix
+    endpoint: ""
+    credentialsSecret: meeting-recorder-s3
+  pvc:
+    size: 50Gi
+    storageClassName: ""

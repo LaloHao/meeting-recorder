@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "Meeting Recorder",
+  "version": "0.1.0",
+  "description": "Graba una pestaña (Meet, Teams web) con su audio, tu micrófono y quién habla, para analizarla con video-context.",
+  "minimum_chrome_version": "116",
+  "permissions": ["activeTab", "scripting", "tabCapture", "offscreen", "downloads", "storage"],
+  "background": {
+    "service_worker": "service-worker.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Meeting Recorder",
+    "default_popup": "popup.html"
+  }
+}

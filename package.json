@@ -1,0 +1,35 @@
+{
+  "name": "@lalohao/meeting-recorder",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Join a video meeting as an agent and record what is shared on screen, the audio, and who spoke when.",
+  "license": "MIT",
+  "author": "Eduardo V.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.5"
+  },
+  "dependencies": {
+    "playwright-core": "^1.64.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  },
+  "bin": {
+    "meeting-recorder": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "shared",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json && chmod +x dist/cli.js",
+    "build:extension": "node scripts/build-extension.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  }
+}

@@ -57,10 +57,12 @@ docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e DISPLAY \
 meeting-recorder k8s seed-profile -p bot      # into PVC meeting-recorder-profile-bot
 ```
 
-A session only works in the Chrome version that signed it in: a different one can't
-decrypt its cookies and drops them (the agent then stops with "holds a Google session
-this Chrome can't read"). Use the same image tag the cluster runs; `meeting-recorder
-login` with your own Chrome works only when it is that same version.
+Why the image: it signs in to Google without signing in to Chrome itself (policy
+`BrowserSignin: 0`), so the whole session is in the cookies that `seed-profile` moves.
+A profile signed in with your own Chrome is usually signed in to Chrome as well; its
+token stays behind, and the recording Chrome then drops the Google cookies. A different
+Chrome version can also fail to read them. Either way the agent stops with "holds a
+Google session this Chrome … can't use".
 
 `seed-profile` exports the profile's session (its cookies and two small settings files),
 copies it into the account's PVC through a short-lived Pod, and then offers to delete the
@@ -114,5 +116,6 @@ The image is `ghcr.io/lalohao/meeting-recorder`, tagged `latest` and with the sh
 of each build of `main`. Pin a tag with `--set image.tag=<sha>` (or in your GitOps values)
 and change it to update; Jobs created afterwards use the new image.
 
-The image pins its Chrome version (`CHROME_VERSION` in the Dockerfile). An update that
-changes it needs the accounts signed in again with the new image, as above.
+The image pins its Chrome version (`CHROME_VERSION` in the Dockerfile). If an update that
+changes it stops the agent with "can't use" the session, sign the accounts in again with
+the new image, as above.

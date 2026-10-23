@@ -27,6 +27,11 @@ RUN apt-get update \
  && rm -f /tmp/chrome.deb /etc/apt/sources.list.d/google-chrome* \
  && apt-get purge -y curl && apt-get autoremove -y \
  && rm -rf /var/lib/apt/lists/*
+# The session lives in the web cookies only. With browser sign-in, signing in to Google
+# also signs Chrome in and keeps a token outside the session files that are moved around;
+# a Chrome that finds the account without its token drops the Google cookies.
+RUN mkdir -p /etc/opt/chrome/policies/managed \
+ && echo '{"BrowserSignin": 0, "SyncDisabled": true}' > /etc/opt/chrome/policies/managed/meeting-recorder.json
 
 WORKDIR /app
 COPY --from=build /app/node_modules ./node_modules

@@ -18,6 +18,14 @@ const CANDIDATES = ['google-chrome', 'google-chrome-stable', 'chromium', 'chromi
 const PASSWORD_STORE = '--password-store=basic'
 const MAC_CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
 
+/**
+ * Extra switches for the environment, e.g. --no-sandbox where a container can't give
+ * Chrome the user namespaces its sandbox needs.
+ */
+function environmentFlags(): string[] {
+  return (process.env.MEETING_RECORDER_CHROME_FLAGS ?? '').split(/\s+/).filter(Boolean)
+}
+
 /** Chrome's executable: `CHROME_PATH`, or the first Chrome/Chromium on PATH. */
 export function findChrome(): string {
   if (process.env.CHROME_PATH) return process.env.CHROME_PATH
@@ -74,7 +82,7 @@ export async function listProfiles(): Promise<ProfileInfo[]> {
  * domain are read (its value is encrypted); a copy is read, as Chrome may hold
  * the database open.
  */
-async function hasGoogleSession(dir: string): Promise<boolean | null> {
+export async function hasGoogleSession(dir: string): Promise<boolean | null> {
   const db = [join(dir, 'Default', 'Network', 'Cookies'), join(dir, 'Default', 'Cookies')].find(existsSync)
   if (!db) return false
   const tmp = mkdtempSync(join(tmpdir(), 'meeting-recorder-'))
@@ -210,9 +218,7 @@ export async function launchRecorderBrowser(opts: { display?: Display; profile?:
     '--no-first-run',
     '--no-default-browser-check',
     PASSWORD_STORE,
-    // Extra switches for the environment, e.g. --no-sandbox where a container can't give
-    // Chrome the user namespaces its sandbox needs.
-    ...(process.env.MEETING_RECORDER_CHROME_FLAGS ?? '').split(/\s+/).filter(Boolean),
+    ...environmentFlags(),
     'about:blank'
   ]
   const child = spawn(findChrome(), args, { detached: true, stdio: 'ignore', env })
@@ -303,7 +309,7 @@ export async function recorderPage(context: BrowserContext): Promise<Page> {
  */
 export function openProfileForSignIn(url: string, profile = DEFAULT_PROFILE): Promise<void> {
   return new Promise((resolve, reject) => {
-    const child = spawn(findChrome(), [`--user-data-dir=${profileDir(profile)}`, PASSWORD_STORE, '--no-first-run', url], { stdio: 'ignore' })
+    const child = spawn(findChrome(), [`--user-data-dir=${profileDir(profile)}`, PASSWORD_STORE, '--no-first-run', ...environmentFlags(), url], { stdio: 'ignore' })
     child.on('error', reject)
     child.on('exit', () => resolve())
   })

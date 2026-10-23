@@ -5,7 +5,7 @@ import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { launchRecorderBrowser, recorderPage, WINDOW, type Display } from './chrome.js'
+import { hasGoogleSession, launchRecorderBrowser, profileDir, recorderPage, WINDOW, type Display } from './chrome.js'
 import { arrangeMeetView, isMeetUrl, joinMeet, leaveMeet, meetingCode, meetState, setCaptionsLanguage } from './meet.js'
 import { baseName, finalizeVideo, recordingFile, type SpeakerTurn } from './recording-file.js'
 import { importSession } from './profile-archive.js'
@@ -86,6 +86,13 @@ export async function recordMeeting(opts: RecordOptions): Promise<RecordResult> 
   let title = opts.title ?? meetingCode(opts.url) ?? 'Meeting'
   try {
     const signedIn = (await context.cookies('https://www.google.com')).some((c) => c.name === 'SID')
+    // Chrome drops cookies it can't decrypt, e.g. a session written by another Chrome
+    // version: joining as a guest then would not be what was asked for.
+    if (!signedIn && (await hasGoogleSession(imported?.dir ?? profileDir(opts.profile)))) {
+      throw new Error(
+        `Profile "${opts.profile ?? 'default'}" holds a Google session this Chrome (${context.browser()?.version() ?? 'unknown version'}) can't read: it was probably signed in with another Chrome version. Sign in again with this same Chrome (see docs/kubernetes.md).`
+      )
+    }
     log(signedIn ? `Profile "${opts.profile ?? 'default'}" has a Google session.` : `Profile "${opts.profile ?? 'default'}" has no Google session: joining as a guest.`)
     await joinMeet(page, opts.url, { guestName: opts.guestName, expectSignedIn: signedIn, log })
     await arrangeMeetView(page, log)

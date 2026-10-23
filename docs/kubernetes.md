@@ -19,8 +19,8 @@ meeting-recorder k8s join <url> ───────▶ Job ─▶ Pod: Chrome 
   StorageClass (for the account profiles).
 - `kubectl` and `helm` on your laptop, and this CLI (`pnpm build`).
 - For S3 storage: a bucket and an access key limited to it. Cloudflare R2 works.
-- A Google account for the agent, signed in to a local profile (`meeting-recorder login -p
-  <account>`). A dedicated account is best: the agent appears under its name.
+- A Google account for the agent, and Docker on your laptop to sign it in (see below). A
+  dedicated account is best: the agent appears under its name.
 
 ## Install
 
@@ -46,10 +46,21 @@ recordings on a volume instead of uploading them.
 
 ## Move the account's session into the cluster
 
+Sign the account in with the **image's own Chrome**, on your laptop (Linux with X11 or
+XWayland; the window opens on your desktop), then move the session into the cluster:
+
 ```bash
-meeting-recorder login -p bot                 # once, on your laptop
+docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e DISPLAY \
+  -e MEETING_RECORDER_PROFILES=/profiles -v ~/.config/meeting-recorder/profiles:/profiles \
+  -v /tmp/.X11-unix:/tmp/.X11-unix --shm-size=1g \
+  ghcr.io/lalohao/meeting-recorder:<tag> login -p bot
 meeting-recorder k8s seed-profile -p bot      # into PVC meeting-recorder-profile-bot
 ```
+
+A session only works in the Chrome version that signed it in: a different one can't
+decrypt its cookies and drops them (the agent then stops with "holds a Google session
+this Chrome can't read"). Use the same image tag the cluster runs; `meeting-recorder
+login` with your own Chrome works only when it is that same version.
 
 `seed-profile` exports the profile's session (its cookies and two small settings files),
 copies it into the account's PVC through a short-lived Pod, and then offers to delete the
@@ -102,3 +113,6 @@ the video is complete. Analyse them with
 The image is `ghcr.io/lalohao/meeting-recorder`, tagged `latest` and with the short commit
 of each build of `main`. Pin a tag with `--set image.tag=<sha>` (or in your GitOps values)
 and change it to update; Jobs created afterwards use the new image.
+
+The image pins its Chrome version (`CHROME_VERSION` in the Dockerfile). An update that
+changes it needs the accounts signed in again with the new image, as above.

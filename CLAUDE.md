@@ -59,6 +59,9 @@ log says what it saw (e.g. menu items), to adjust labels when Meet changes.
 - Tab capture misses remote WebRTC audio, and MediaRecorder never starts with silent audio
   (nobody speaking yet): that's why audio is mixed from `<audio>` elements with a constant
   silent source.
+- **A session only works in the Chrome version that signed it in**: another version drops
+  the cookies (the agent stops saying so; before, it joined as a guest and Meet refused it). Chrome is pinned in the
+  Dockerfile; sign cluster accounts in with the image (`docker run … login`).
 - In containers Chrome needs `--no-sandbox` (`MEETING_RECORDER_CHROME_FLAGS`) and a 1 GiB
   `/dev/shm`.
 

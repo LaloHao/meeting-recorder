@@ -11,15 +11,21 @@ COPY src ./src
 RUN pnpm build && pnpm prune --prod
 
 FROM node:22-bookworm-slim
+# Chrome is pinned: a session only works in the Chrome version that signed it in (a newer
+# one can drop its cookies), so changing it means signing the accounts in again with the
+# new image (docs/kubernetes.md). Version and SHA256 from
+# https://dl.google.com/linux/chrome/deb/dists/stable/main/binary-amd64/Packages
+ARG CHROME_VERSION=156.0.8078.47-1
+ARG CHROME_SHA256=6c92cd22e90c6e3e255d782991543fa2091db8614e8536a971a7433a5c4d7ac8
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates curl gnupg \
- && curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg \
- && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] https://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
- && apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates curl \
+ && curl -fsSLo /tmp/chrome.deb "https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_${CHROME_VERSION}_amd64.deb" \
+ && echo "${CHROME_SHA256}  /tmp/chrome.deb" | sha256sum -c - \
  && apt-get install -y --no-install-recommends \
-      google-chrome-stable xvfb ffmpeg tar \
+      /tmp/chrome.deb xvfb ffmpeg tar \
       fonts-noto-core fonts-noto-cjk fonts-noto-color-emoji \
- && apt-get purge -y curl gnupg && apt-get autoremove -y \
+ && rm -f /tmp/chrome.deb /etc/apt/sources.list.d/google-chrome* \
+ && apt-get purge -y curl && apt-get autoremove -y \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

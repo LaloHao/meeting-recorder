@@ -212,6 +212,9 @@ export async function launchRecorderBrowser(opts: { display?: Display; profile?:
     ...(virtual ? ['--ozone-platform=x11'] : []),
     '--auto-accept-this-tab-capture',
     '--autoplay-policy=no-user-gesture-required',
+    // Not heard on the machine's speakers (where someone may be in the same call); the
+    // recording takes the audio from the streams themselves, which muting leaves alone.
+    '--mute-audio',
     '--disable-background-timer-throttling',
     '--disable-backgrounding-occluded-windows',
     '--disable-renderer-backgrounding',

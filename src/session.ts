@@ -6,7 +6,7 @@ import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { hasGoogleSession, launchRecorderBrowser, profileDir, recorderPage, WINDOW, type Display } from './chrome.js'
-import { arrangeMeetView, isMeetUrl, joinMeet, leaveMeet, meetingCode, meetState, setCaptionsLanguage } from './meet.js'
+import { arrangeMeetView, ensureCaptions, isMeetUrl, joinMeet, leaveMeet, meetingCode, meetState, setCaptionsLanguage } from './meet.js'
 import { baseName, finalizeVideo, recordingFile, type SpeakerTurn } from './recording-file.js'
 import { importSession } from './profile-archive.js'
 import { startTabRecording, type TabRecording } from './tab-recorder.js'
@@ -111,11 +111,22 @@ export async function recordMeeting(opts: RecordOptions): Promise<RecordResult> 
       g.__vcSpeakers.start({ startedAtMs, autoCaptions: true, hideCaptions: true }, (t) => g.__vcSpeakerTurn(t))
     }, recording.startedAtMs)
 
-    if (opts.language) {
-      await sleep(2000) // the captions bar appears a moment after captions are turned on
-      const set = await setCaptionsLanguage(page, opts.language)
-      log(set === true ? `Captions language: ${opts.language}.` : `Could not set the captions language (${set}).`)
+    // Captions name the speakers; without them, who spoke when comes from the tiles' audio
+    // indicator, which misses people off screen and can take a control's label for a name.
+    const captionsOn = async (): Promise<boolean> => {
+      const on = await ensureCaptions(page)
+      log(on === true ? 'Captions: on (they name the speakers).' : `Could not turn on the captions (${on}): who spoke when comes from the tiles' audio indicator, which is less reliable.`)
+      if (on !== true) return false
+      if (opts.language) {
+        await sleep(2000) // the captions bar appears a moment after captions are turned on
+        const set = await setCaptionsLanguage(page, opts.language)
+        log(set === true ? `Captions language: ${opts.language}.` : `Could not set the captions language (${set}).`)
+      }
+      return true
     }
+    await sleep(3000) // the call controls are still loading right after joining
+    // Once more a little later: the controls may not have been there yet.
+    if (!(await captionsOn())) setTimeout(() => void captionsOn().catch(() => {}), 30_000)
     title = opts.title ?? (await meetTitle(page)) ?? title
     const rec = recording
     setTimeout(() => void rec.audioStreams().then((n) => log(`Audio: ${n} participant stream(s) being recorded.`), () => {}), 10_000)

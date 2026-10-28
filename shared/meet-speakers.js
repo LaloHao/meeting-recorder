@@ -108,22 +108,30 @@
 
   // --------------------------------------------------------------- indicator
 
-  // Best-effort participant name from a tile: the last short line that isn't a
-  // Material icon ligature (e.g. "mic_off") or the label of a control in the tile
-  // (e.g. "More actions").
+  // What a tile's controls say ("Mute", "Pin", "More actions"…), in the languages Meet is
+  // used in: never a participant's name, even when the text is in no button.
+  const CONTROL_WORDS = /^(mute|unmute|muted|pin|unpin|remove|more options|more actions|silenciar|activar (el )?(sonido|micrófono)|silenciado|fijar|dejar de fijar|quitar|más opciones|más acciones|desativar som|ativar som|fixar|couper le son|réactiver le son|épingler|stummschalten|anheften)\b/i;
+
+  // Best-effort participant name from the lines of a tile's text: the last short line
+  // that isn't a Material icon ligature (e.g. "mic_off"), the label of one of its
+  // controls (`controls`), or a control word.
+  function nameFromLines(lines, controls) {
+    const names = lines
+      .map((l) => l.trim())
+      .filter((l) => l && l.length <= 40 && !/^[a-z0-9_]+$/.test(l) && !controls.has(l) && !CONTROL_WORDS.test(l));
+    return names.at(-1) || '';
+  }
+
   function tileName(tile) {
+    // Buttons, menu items and tooltips (shown on hover) only say what a control does.
     const controls = new Set(
-      [...tile.querySelectorAll('[aria-label], [data-tooltip], button')].flatMap((el) => [
+      [...tile.querySelectorAll('[aria-label], [data-tooltip], button, [role="button"], [role="menuitem"], [role="tooltip"]')].flatMap((el) => [
         el.getAttribute('aria-label')?.trim(),
         el.getAttribute('data-tooltip')?.trim(),
-        el.tagName === 'BUTTON' ? el.innerText.trim() : undefined,
+        el.tagName === 'BUTTON' || el.hasAttribute('role') ? el.innerText.trim() : undefined,
       ]),
     );
-    const lines = tile.innerText
-      .split('\n')
-      .map((l) => l.trim())
-      .filter((l) => l && l.length <= 40 && !/^[a-z0-9_]+$/.test(l) && !controls.has(l));
-    return lines.at(-1) || '';
+    return nameFromLines(tile.innerText.split('\n'), controls);
   }
 
   // The agent's own tile ("Name (You)") never speaks.
@@ -223,5 +231,5 @@
     session = null;
   }
 
-  globalThis.__vcSpeakers = { start, stop, captionsOn: () => Boolean(findCaptionRegion()) };
+  globalThis.__vcSpeakers = { start, stop, captionsOn: () => Boolean(findCaptionRegion()), nameFromLines };
 })();

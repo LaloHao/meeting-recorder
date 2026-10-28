@@ -202,6 +202,49 @@ const LANGUAGE_NAMES: Record<string, string> = {
 }
 
 /**
+ * Turns on Meet's live captions, which name the speakers (the detector keeps them off
+ * screen): the captions button, else Meet's "c" shortcut, else the item of the More
+ * options menu, where the button goes when the window is narrow. True, or what Meet
+ * showed (to fix the labels when Meet changes them).
+ */
+export async function ensureCaptions(page: Page): Promise<true | string> {
+  const on = (): Promise<boolean> =>
+    page.evaluate(() => Boolean((globalThis as unknown as { __vcSpeakers?: { captionsOn(): boolean } }).__vcSpeakers?.captionsOn()))
+  const settled = async (): Promise<boolean> => {
+    for (let i = 0; i < 6; i++) {
+      if (await on()) return true
+      await new Promise((r) => setTimeout(r, 500))
+    }
+    return false
+  }
+  if (await on()) return true
+  const button = page.getByRole('button', { name: /^turn on captions/i }).first()
+  if (await button.count()) {
+    await button.click({ timeout: 3000 }).catch(() => {})
+    if (await settled()) return true
+  }
+  // The shortcut toggles them, so it is pressed only while they are off.
+  await page.keyboard.press('c').catch(() => {})
+  if (await settled()) return true
+  let menu: string[] = []
+  try {
+    await page.getByRole('button', { name: /^more options$/i }).first().click({ timeout: 3000 })
+    menu = await page.getByRole('menuitem').evaluateAll((els) => els.map((e) => (e.getAttribute('aria-label') ?? (e as HTMLElement).innerText).trim().slice(0, 40)))
+    await page.getByRole('menuitem', { name: /turn on captions|^captions$/i }).first().click({ timeout: 3000 })
+    if (await settled()) return true
+  } catch {
+    /* no such item: said below */
+  } finally {
+    await page.keyboard.press('Escape').catch(() => {})
+  }
+  const buttons = await page
+    .locator('button[aria-label]')
+    .evaluateAll((els) => els.map((e) => e.getAttribute('aria-label') ?? '').filter((l) => /caption|subt/i.test(l)).slice(0, 5))
+    .catch(() => [] as string[])
+  return `captions buttons: ${buttons.join(' | ') || 'none'}; menu: ${menu.join(' | ') || 'not opened'}`
+}
+
+/**
  * Sets the language Meet's live captions listen for (they name the speakers, and
  * recognise little of a language they don't expect). True, or what went wrong.
  */

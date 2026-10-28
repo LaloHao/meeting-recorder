@@ -64,6 +64,12 @@ log says what it saw (e.g. menu items), to adjust labels when Meet changes.
   that finds the account without it drops the Google cookies. The image sets the policy
   `BrowserSignin: 0`; sign cluster accounts in with the image (`docker run … login`).
   Chrome is also pinned in the Dockerfile so an image rebuild doesn't change it.
+- **Captions name the speakers; the tile indicator is a guess.** Without captions, a name is
+  read from a tile's text, where controls ("Mute", "Pin") show on hover: `nameFromLines`
+  skips them. The agent turns captions on with `ensureCaptions` (the button, Meet's `c`
+  shortcut, or the More options item where the button goes in a narrow window) and logs
+  the labels it saw when it can't. A `.json` whose turns are all `indicator` means captions
+  stayed off.
 - In containers Chrome needs `--no-sandbox` (`MEETING_RECORDER_CHROME_FLAGS`) and a 1 GiB
   `/dev/shm`.
 

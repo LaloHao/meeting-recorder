@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs'
+import { runInThisContext } from 'node:vm'
+
 import { describe, expect, it } from 'vitest'
 
 import { englishUrl, isMeetUrl, meetingCode } from '../src/meet.js'
@@ -37,5 +40,21 @@ describe('recording file', () => {
     expect(file.recordingStartedAt).toBe('2026-10-22T16:00:00.000Z')
     expect(file.durationSeconds).toBe(1800.12)
     expect(file.speakers.map((s) => s.name)).toEqual(['Ana', 'Carlos'])
+  })
+})
+
+describe('speaker names from a tile', () => {
+  // The detector is a plain script for the page: run here, it defines its functions all the same.
+  runInThisContext(readFileSync(new URL('../shared/meet-speakers.js', import.meta.url), 'utf8'))
+  const { nameFromLines } = (globalThis as unknown as { __vcSpeakers: { nameFromLines(lines: string[], controls: Set<string>): string } }).__vcSpeakers
+
+  it('takes the name, not an icon or a control', () => {
+    expect(nameFromLines(['mic_off', 'Daniela Carrizales', 'Mute'], new Set())).toBe('Daniela Carrizales')
+    expect(nameFromLines(['Ana López', 'more_vert', 'Pin'], new Set())).toBe('Ana López')
+    expect(nameFromLines(['Luis', 'Más opciones'], new Set())).toBe('Luis')
+    expect(nameFromLines(['Carlos', 'Pin Carlos to your main screen'], new Set(['Pin Carlos to your main screen']))).toBe('Carlos')
+    // A name that only starts like a control word is still a name.
+    expect(nameFromLines(['Pinto Ramírez'], new Set())).toBe('Pinto Ramírez')
+    expect(nameFromLines(['Mute'], new Set())).toBe('')
   })
 })

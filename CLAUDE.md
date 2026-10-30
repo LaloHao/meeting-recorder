@@ -28,6 +28,7 @@ helm lint deploy/helm/meeting-recorder --set storage.s3.url=s3://b --set storage
 | `src/meet.ts` | Meet specifics: join, waiting room, Spotlight, call state, captions language. |
 | `src/tab-recorder.ts` | getDisplayMedia (video) + Meet's `<audio>` streams mixed in WebAudio → MediaRecorder → disk every second. |
 | `shared/meet-speakers.js` | Speaker detector (captions + tile indicator), shared with the extension. Plain JS evaluated in the page. |
+| `shared/webm-duration.js` | Adds the duration MediaRecorder leaves out to a WebM's header (the extension's recordings). |
 | `src/profile-archive.ts`, `src/upload.ts` | Session export/import; S3/R2 upload (aws4fetch). |
 | `src/k8s.ts`, `src/k8s-job.ts` | The `k8s` commands; the Job built from the chart's ConfigMap `meeting-recorder-settings`. |
 | `deploy/helm/meeting-recorder` | Chart: settings ConfigMap, ResourceQuota, optional recordings PVC. |
@@ -70,6 +71,10 @@ log says what it saw (e.g. menu items), to adjust labels when Meet changes.
   shortcut, or the More options item where the button goes in a narrow window) and logs
   the labels it saw when it can't. A `.json` whose turns are all `indicator` means captions
   stayed off.
+- **MediaRecorder never finishes its WebM**: no duration in the header, no index, so players
+  can't seek in it. The agent remuxes with ffmpeg (`finalizeVideo`, index first); the
+  extension, without ffmpeg, adds the duration to the header (`shared/webm-duration.js`,
+  tested on a real MediaRecorder file in `test/fixtures`).
 - In containers Chrome needs `--no-sandbox` (`MEETING_RECORDER_CHROME_FLAGS`) and a 1 GiB
   `/dev/shm`.
 

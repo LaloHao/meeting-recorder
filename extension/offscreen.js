@@ -2,6 +2,8 @@
 // WebM file. Audio and video share one MediaRecorder, so they share one clock:
 // any timestamp in the transcript maps directly to the same time in the video.
 
+import { setWebmDuration } from './shared/webm-duration.js';
+
 const MIME_CANDIDATES = [
   'video/webm;codecs=vp9,opus',
   'video/webm;codecs=vp8,opus',
@@ -79,7 +81,7 @@ async function start({ streamId, includeMic, meta }) {
   recorder.ondataavailable = (e) => {
     if (e.data.size > 0) chunks.push(e.data);
   };
-  recorder.onstop = () => finish();
+  recorder.onstop = () => void finish();
   recorder.onerror = (e) => fail(e.error?.message || 'Error de MediaRecorder');
 
   // If the tab is closed or navigates away, the capture ends: finish what we have.
@@ -101,13 +103,26 @@ function cleanup() {
   session = null;
 }
 
-function finish() {
+// MediaRecorder never writes the duration in the file's header: without it players can't
+// show its length nor seek well. It is added to the header, in the first chunk; if that
+// fails for any reason, the recording is saved as it is.
+async function withDuration(blob, durationMs) {
+  try {
+    const head = new Uint8Array(await blob.slice(0, Math.min(blob.size, 1 << 20)).arrayBuffer());
+    const fixed = setWebmDuration(head, durationMs);
+    return fixed ? new Blob([fixed.head, blob.slice(fixed.end)], { type: blob.type }) : blob;
+  } catch {
+    return blob;
+  }
+}
+
+async function finish() {
   if (!session) return;
   const { chunks, startedAt, mimeType, meta } = session;
   const endedAt = new Date();
   cleanup();
 
-  const videoBlob = new Blob(chunks, { type: mimeType || 'video/webm' });
+  const videoBlob = await withDuration(new Blob(chunks, { type: mimeType || 'video/webm' }), endedAt - startedAt);
   const metadata = {
     ...meta,
     // All media timestamps are relative to recordingStartedAt (t=0 of the file).

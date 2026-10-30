@@ -67,7 +67,7 @@ export function baseName(title: string, at: Date): string {
  */
 export function finalizeVideo(ffmpeg: string, input: string, output: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    const child = spawn(ffmpeg, ['-hide_banner', '-v', 'error', '-y', '-i', input, '-map', '0', '-c', 'copy', '-metadata:s:v', 'alpha_mode=', output], {
+    const child = spawn(ffmpeg, ['-hide_banner', '-v', 'error', '-y', '-i', input, '-map', '0', '-c', 'copy', '-metadata:s:v', 'alpha_mode=', '-cues_to_front', '1', output], {
       stdio: ['ignore', 'ignore', 'pipe']
     })
     let stderr = ''
